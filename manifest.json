@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Ad Skipper",
+  "version": "1.0",
+  "description": "Automatically skips ads on major streaming platforms",
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.hotstar.com/*",
+        "*://*.youtube.com/*",
+        "*://*.primevideo.com/*",
+        "*://*.amazon.com/*",
+        "*://*.sonyliv.com/*",
+        "*://*.zee5.com/*",
+        "*://*.airtelxstream.in/*",
+        "*://*.airtel.in/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
