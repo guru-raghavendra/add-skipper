@@ -7,7 +7,6 @@
     {
       "matches": [
         "*://*.hotstar.com/*",
-        "*://*.youtube.com/*",
         "*://*.primevideo.com/*",
         "*://*.amazon.com/*",
         "*://*.sonyliv.com/*",

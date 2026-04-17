@@ -1,29 +1,51 @@
 let lastSrc = '';
 let observer = null;
-let skipTimer = null;      // for debouncing the MutationObserver callback
-let observedTarget = null; // tracks the DOM node being observed (for SPA re-attach)
+let skipTimer = null;
+let observedTarget = null;
 
-const findAdContainer = (video) => {
-  let el = video.parentElement;
-  while (el) {
-    if (/(ad|ads|advertisement)/i.test(el.id + ' ' + el.className)) {
-      return el;
+const findAdContainer = () => {
+  for (const video of document.querySelectorAll('video')) {
+    let el = video.parentElement;
+    let depth = 0;
+    while (el && depth < 5) {
+      if (/(ad|ads|advertisement)/i.test(el.id + ' ' + el.className)) {
+        return el;
+      }
+      el = el.parentElement;
+      depth++;
     }
-    el = el.parentElement;
   }
-  return document.body; // fallback
+  return null;
+};
+
+const skipVideo = (adVideo, trigger) => {
+  const dur = adVideo.duration;
+  if (dur && isFinite(dur) && dur > 0.5) {
+    console.log(`⏭️ skipped by [${trigger}]`, { duration: dur });
+    adVideo.currentTime = dur - 0.5;
+  } else {
+    adVideo.addEventListener('loadedmetadata', () => {
+      const dur = adVideo.duration;
+      if (dur && isFinite(dur) && dur > 0.5) {
+        console.log(`⏭️ skipped by [loadedmetadata after ${trigger}]`, { duration: dur });
+        adVideo.currentTime = dur - 0.5;
+      }
+    }, { once: true });
+  }
 };
 
 const attachObserver = () => {
   if (observer) observer.disconnect();
-  lastSrc = ''; // Reset lastSrc to ensure same-src ads are skipped on new pages
+  lastSrc = '';
 
-  const video = document.querySelector('video');
-  if (!video) return;
+  const target = findAdContainer();
+  if (!target) {
+    console.log('⚠️ No ad container found, skipping attach');
+    return;
+  }
 
-  const target = findAdContainer(video);
-  observedTarget = target; // keep a reference so pageObserver can check if it's still in the DOM
-  console.log('🎯 Observing:', target.id || target.className || 'body');
+  observedTarget = target;
+  console.log('🎯 Observing:', target.id || target.className);
 
   observer = new MutationObserver(() => {
     clearTimeout(skipTimer);
@@ -35,15 +57,8 @@ const attachObserver = () => {
       if (!src || src === lastSrc) return;
 
       lastSrc = src;
-
-      adVideo.addEventListener('loadedmetadata', () => {
-        const dur = adVideo.duration;
-        if (dur && isFinite(dur) && dur > 0.5) {
-          console.log('⏭️ skipped by [loadedmetadata]', { duration: dur });
-          adVideo.currentTime = dur - 0.5;
-        }
-      }, { once: true });
-    }, 50); // debounce: wait 50ms before acting on DOM mutations
+      skipVideo(adVideo, 'mutation');
+    }, 50);
   });
 
   observer.observe(target, {
@@ -53,19 +68,25 @@ const attachObserver = () => {
     attributeFilter: ['src'],
   });
 
+  // ✅ Fix: immediately handle video that's already present when observer attaches
+  const adVideo = target.querySelector('video');
+  if (adVideo) {
+    const src = adVideo.src || adVideo.currentSrc;
+    if (src) {
+      lastSrc = src;
+      skipVideo(adVideo, 'attach');
+    }
+  }
+
   console.log('🛡️ Ad skipper active!');
 };
 
-// Re-attach on page navigation (SPA support)
-// Triggers when: no observer yet, OR the observed node has been removed from the DOM (SPA nav)
 const pageObserver = new MutationObserver(() => {
-  const video = document.querySelector('video');
-  if (video && (!observer || !document.body.contains(observedTarget))) {
+  if (!observer || !document.body.contains(observedTarget)) {
     attachObserver();
   }
 });
 
 pageObserver.observe(document.body, { childList: true, subtree: true });
 
-// Initial attach
 attachObserver();
